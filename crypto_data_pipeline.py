@@ -32,10 +32,14 @@ class AppConfig:
     min_volume_usdt: float
     top_n: int | None
     timeout_seconds: int
+    amount_unit_divisor: float
 
 
 def load_config(path: Path) -> AppConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    amount_unit_divisor = float(raw.get("amount_unit_divisor", USD_MILLION))
+    if amount_unit_divisor <= 0:
+        raise ValueError("amount_unit_divisor 必须大于 0")
 
     return AppConfig(
         out_file=raw.get("out_file", "crypto.xlsx"),
@@ -48,6 +52,7 @@ def load_config(path: Path) -> AppConfig:
         min_volume_usdt=float(raw.get("filters", {}).get("min_volume_usdt", 0)),
         top_n=raw.get("filters", {}).get("top_n"),
         timeout_seconds=int(raw.get("timeout_seconds", 10)),
+        amount_unit_divisor=amount_unit_divisor,
     )
 
 
@@ -97,6 +102,7 @@ def normalize_rows(
     market_cap_map: dict[str, float],
     quote_asset: str,
     min_volume_usdt: float,
+    amount_unit_divisor: float,
 ) -> list[dict[str, Any]]:
     now_ts = int(time.time())
     rows: list[dict[str, Any]] = []
@@ -115,14 +121,14 @@ def normalize_rows(
             {
                 "symbol": symbol,
                 "price": float(t.get("lastPrice", 0) or 0),
-                "volume_24h_musd": quote_volume / USD_MILLION,
+                "volume_24h_musd": quote_volume / amount_unit_divisor,
                 "market_cap": market_cap_map.get(base_symbol.upper()),
                 "timestamp": now_ts,
             }
         )
 
         if rows[-1]["market_cap"] is not None:
-            rows[-1]["market_cap_musd"] = rows[-1]["market_cap"] / USD_MILLION
+            rows[-1]["market_cap_musd"] = rows[-1]["market_cap"] / amount_unit_divisor
         else:
             rows[-1]["market_cap_musd"] = None
 
@@ -158,6 +164,7 @@ def main() -> None:
         market_cap_map=market_cap_map,
         quote_asset=cfg.quote_asset,
         min_volume_usdt=cfg.min_volume_usdt,
+        amount_unit_divisor=cfg.amount_unit_divisor,
     )
     export_excel(rows, cfg.fields, cfg.out_file, cfg.top_n)
 
