@@ -1,6 +1,7 @@
 out_file: output/crypto.xlsx
 vs_currency: usd
 quote_asset: USDT
+amount_unit_divisor: 1000000
 
 # 字段建议配置化；当前仅保留你提到的核心字段。
 fields:

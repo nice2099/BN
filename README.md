@@ -16,9 +16,11 @@ python crypto_data_pipeline.py --config config.yaml
 
 输出文件默认在 `output/crypto.xlsx`。
 
+你可以在配置文件中通过 `amount_unit_divisor` 配置市值与成交额的单位换算系数，默认值是 `1000000`（百万）。
+
 ### 数据标准化字段
 
-> `volume_24h_musd` 与 `market_cap_musd` 单位均为 **百万美元（M USD）**。
+> `volume_24h_musd` 与 `market_cap_musd` 默认单位均为 **百万美元（M USD）**，可通过 `amount_unit_divisor` 调整。
 
 ```json
 {
