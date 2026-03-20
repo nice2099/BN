@@ -18,12 +18,14 @@ python crypto_data_pipeline.py --config config.yaml
 
 ### 数据标准化字段
 
+> `volume_24h_musd` 与 `market_cap_musd` 单位均为 **百万美元（M USD）**。
+
 ```json
 {
   "symbol": "BTCUSDT",
   "price": 65000,
-  "volume_24h": 1000000000,
-  "market_cap": 1200000000000,
+  "volume_24h_musd": 1000,
+  "market_cap_musd": 1200000,
   "timestamp": 1710000000
 }
 ```
