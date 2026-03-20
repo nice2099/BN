@@ -6,8 +6,8 @@ quote_asset: USDT
 fields:
   - symbol
   - price
-  - volume_24h
-  - market_cap
+  - volume_24h_musd
+  - market_cap_musd
   - timestamp
   # - vwap
   # - liquidity_score

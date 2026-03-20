@@ -20,6 +20,7 @@ import yaml
 
 BINANCE_24HR_URL = "https://api.binance.com/api/v3/ticker/24hr"
 COINGECKO_MARKETS_URL = "https://api.coingecko.com/api/v3/coins/markets"
+USD_MILLION = 1_000_000
 
 
 @dataclass
@@ -40,7 +41,10 @@ def load_config(path: Path) -> AppConfig:
         out_file=raw.get("out_file", "crypto.xlsx"),
         vs_currency=raw.get("vs_currency", "usd"),
         quote_asset=raw.get("quote_asset", "USDT"),
-        fields=raw.get("fields", ["symbol", "price", "volume_24h", "market_cap", "timestamp"]),
+        fields=raw.get(
+            "fields",
+            ["symbol", "price", "volume_24h_musd", "market_cap_musd", "timestamp"],
+        ),
         min_volume_usdt=float(raw.get("filters", {}).get("min_volume_usdt", 0)),
         top_n=raw.get("filters", {}).get("top_n"),
         timeout_seconds=int(raw.get("timeout_seconds", 10)),
@@ -111,11 +115,16 @@ def normalize_rows(
             {
                 "symbol": symbol,
                 "price": float(t.get("lastPrice", 0) or 0),
-                "volume_24h": quote_volume,
+                "volume_24h_musd": quote_volume / USD_MILLION,
                 "market_cap": market_cap_map.get(base_symbol.upper()),
                 "timestamp": now_ts,
             }
         )
+
+        if rows[-1]["market_cap"] is not None:
+            rows[-1]["market_cap_musd"] = rows[-1]["market_cap"] / USD_MILLION
+        else:
+            rows[-1]["market_cap_musd"] = None
 
     return rows
 
@@ -126,7 +135,8 @@ def export_excel(rows: list[dict[str, Any]], fields: list[str], out_file: str, t
         df = pd.DataFrame(columns=fields)
     else:
         df = df[fields]
-        df = df.sort_values(by="volume_24h", ascending=False)
+        sort_field = "volume_24h_musd" if "volume_24h_musd" in df.columns else "volume_24h"
+        df = df.sort_values(by=sort_field, ascending=False)
         if top_n:
             df = df.head(top_n)
 
