@@ -1,0 +1,21 @@
+out_file: output/crypto.xlsx
+vs_currency: usd
+quote_asset: USDT
+
+# 字段建议配置化；当前仅保留你提到的核心字段。
+fields:
+  - symbol
+  - price
+  - volume_24h
+  - market_cap
+  - timestamp
+  # - vwap
+  # - liquidity_score
+  # - spread
+  # - volatility
+
+filters:
+  min_volume_usdt: 1000000
+  top_n: 200
+
+timeout_seconds: 10
