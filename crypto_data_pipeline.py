@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,6 +66,49 @@ def get_binance_tickers(timeout_seconds: int) -> list[dict[str, Any]]:
     return data
 
 
+def request_json_with_retries(
+    url: str,
+    timeout_seconds: int,
+    *,
+    params: dict[str, Any] | None = None,
+    max_retries: int = 5,
+    base_delay_seconds: float = 0.8,
+) -> Any:
+    """请求 JSON，并在 429/5xx 时进行指数退避重试。"""
+    last_error: Exception | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout_seconds)
+
+            if resp.status_code in (429, 500, 502, 503, 504):
+                retry_after = resp.headers.get("Retry-After")
+                if retry_after and retry_after.isdigit():
+                    sleep_seconds = float(retry_after)
+                else:
+                    jitter = random.uniform(0.0, 0.5)
+                    sleep_seconds = (base_delay_seconds * (2**attempt)) + jitter
+
+                if attempt >= max_retries:
+                    resp.raise_for_status()
+
+                time.sleep(sleep_seconds)
+                continue
+
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt >= max_retries:
+                break
+            jitter = random.uniform(0.0, 0.5)
+            time.sleep((base_delay_seconds * (2**attempt)) + jitter)
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("请求失败且未获取到具体异常")
+
+
 def get_coingecko_market_caps(vs_currency: str, timeout_seconds: int) -> dict[str, float]:
     symbol_to_market_cap: dict[str, float] = {}
 
@@ -76,10 +120,11 @@ def get_coingecko_market_caps(vs_currency: str, timeout_seconds: int) -> dict[st
             "page": page,
             "sparkline": "false",
         }
-        resp = requests.get(COINGECKO_MARKETS_URL, params=params, timeout=timeout_seconds)
-        resp.raise_for_status()
-
-        batch = resp.json()
+        batch = request_json_with_retries(
+            COINGECKO_MARKETS_URL,
+            timeout_seconds=timeout_seconds,
+            params=params,
+        )
         if not batch:
             break
 
