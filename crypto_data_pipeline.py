@@ -32,10 +32,15 @@ class AppConfig:
     min_volume_usdt: float
     top_n: int | None
     timeout_seconds: int
+    value_unit: float
 
 
 def load_config(path: Path) -> AppConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    unit_cfg = raw.get("units", {})
+    value_unit = float(unit_cfg.get("value_unit", USD_MILLION))
+    if value_unit <= 0:
+        raise ValueError("units.value_unit 必须大于 0")
 
     return AppConfig(
         out_file=raw.get("out_file", "crypto.xlsx"),
@@ -48,6 +53,7 @@ def load_config(path: Path) -> AppConfig:
         min_volume_usdt=float(raw.get("filters", {}).get("min_volume_usdt", 0)),
         top_n=raw.get("filters", {}).get("top_n"),
         timeout_seconds=int(raw.get("timeout_seconds", 10)),
+        value_unit=value_unit,
     )
 
 
@@ -97,6 +103,7 @@ def normalize_rows(
     market_cap_map: dict[str, float],
     quote_asset: str,
     min_volume_usdt: float,
+    value_unit: float,
 ) -> list[dict[str, Any]]:
     now_ts = int(time.time())
     rows: list[dict[str, Any]] = []
@@ -115,16 +122,20 @@ def normalize_rows(
             {
                 "symbol": symbol,
                 "price": float(t.get("lastPrice", 0) or 0),
-                "volume_24h_musd": quote_volume / USD_MILLION,
+                "volume_24h_unit": quote_volume / value_unit,
                 "market_cap": market_cap_map.get(base_symbol.upper()),
                 "timestamp": now_ts,
             }
         )
 
         if rows[-1]["market_cap"] is not None:
-            rows[-1]["market_cap_musd"] = rows[-1]["market_cap"] / USD_MILLION
+            rows[-1]["market_cap_unit"] = rows[-1]["market_cap"] / value_unit
         else:
-            rows[-1]["market_cap_musd"] = None
+            rows[-1]["market_cap_unit"] = None
+
+        # 兼容旧字段命名（默认百万美元），避免现有配置与下游立刻受影响。
+        rows[-1]["volume_24h_musd"] = rows[-1]["volume_24h_unit"]
+        rows[-1]["market_cap_musd"] = rows[-1]["market_cap_unit"]
 
     return rows
 
@@ -135,7 +146,12 @@ def export_excel(rows: list[dict[str, Any]], fields: list[str], out_file: str, t
         df = pd.DataFrame(columns=fields)
     else:
         df = df[fields]
-        sort_field = "volume_24h_musd" if "volume_24h_musd" in df.columns else "volume_24h"
+        if "volume_24h_unit" in df.columns:
+            sort_field = "volume_24h_unit"
+        elif "volume_24h_musd" in df.columns:
+            sort_field = "volume_24h_musd"
+        else:
+            sort_field = "volume_24h"
         df = df.sort_values(by=sort_field, ascending=False)
         if top_n:
             df = df.head(top_n)
@@ -158,6 +174,7 @@ def main() -> None:
         market_cap_map=market_cap_map,
         quote_asset=cfg.quote_asset,
         min_volume_usdt=cfg.min_volume_usdt,
+        value_unit=cfg.value_unit,
     )
     export_excel(rows, cfg.fields, cfg.out_file, cfg.top_n)
 
